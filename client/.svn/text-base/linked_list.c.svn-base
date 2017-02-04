@@ -1,0 +1,299 @@
+#include "linked_list.h"
+#include "types.h"
+
+struct db_object *head;
+void init_list()
+{
+    head=NULL;	
+}
+
+bool is_empty()
+{
+    if(head == NULL)
+        return true;
+    else
+        return false;
+}
+
+void append(struct db_object *obj)
+{
+
+    if(is_empty()){
+        obj->next=obj;
+        obj->prev=obj;
+        head=obj;
+    }
+    else{
+        obj->next=head;
+        obj->prev=head->prev;
+        head->prev->next=obj;
+        head->prev=obj;
+    }
+    return;
+}
+
+//mkonda.sn
+void edit(struct db_object *obj)
+{
+
+    struct db_object *old_obj;
+    if((old_obj=search(obj->obj_id,obj->server_index))==NULL){
+       printf("Object is not present... exiting\n");
+       exit(0);
+    }
+
+    memcpy(old_obj->object,obj->object,OBJ_SIZE);
+}
+//mkonda.en
+
+void del(struct db_object *obj)
+{
+    if(head==obj && head->next==obj){
+        head=NULL;
+        return;
+    }
+    else{
+        if(head==obj){
+            head=obj->next;
+        }
+
+        obj->prev->next=obj->next;
+        obj->next->prev=obj->prev;
+    }
+    return;
+}
+
+struct db_object *search(int lts,int server_index)
+{
+
+	struct db_object *current = head;
+    while(current){
+	
+		if (lts == current->obj_id && \
+            server_index == current->server_index)
+		{
+            return current;					
+        }
+		current = current->next;			
+    }
+
+    return NULL;
+}
+
+
+void append_obj(char *obj)
+{
+    int ret;
+    /*
+     * Build the packet and send to server
+     */ 
+
+    struct req_client client_request;
+
+    client_request.packet_type  = packet_Client;
+    client_request.op           = 'a';
+    client_request.obj_id       = -997;
+    client_request.server_index = -997;
+    memcpy(client_request.db_name,dboard,DB_NAME_SIZE);
+    memcpy(client_request.obj,obj,OBJ_SIZE);
+    printf("Appending Object %s\n",obj);
+    
+    ret= SP_multicast(  
+                         Mbox, 
+                         FIFO_MESS,
+                         server_list[cs_index-1],
+                         1,
+                         sizeof(struct req_client),
+                         (char*)&client_request 
+                     );
+
+    if(ret<0) 
+    {
+        SP_error( ret );
+    //    Bye();
+    }
+    printf("sent message\n" );
+    return;
+}
+
+struct db_object *search_obj(int obj_num)
+{
+    int i=0;
+    struct db_object *current = head;
+
+    while(current && (i<obj_num)){
+        current = current->next;    
+        i++;
+    }   
+    return current;    
+}
+
+void edit_obj(int obj_num, char *obj)
+{
+    struct db_object *ob;
+    int ret;
+   
+    if((ob=search_obj(obj_num))==NULL){
+        printf("Object is not present... exiting\n");
+        exit(0);
+    }
+    /*
+     * Build the packet and send to server
+     */
+
+    struct req_client client_request;
+
+    client_request.packet_type  = packet_Client;
+    client_request.op           = 'e';
+    client_request.obj_id       = ob->obj_id;
+    client_request.server_index = ob->server_index;
+    memcpy(client_request.db_name,dboard,DB_NAME_SIZE);
+    memcpy(client_request.obj,obj,OBJ_SIZE);
+    printf("Editing Object %s\n",obj);
+
+    ret= SP_multicast(
+                         Mbox,
+                         FIFO_MESS,
+                         server_list[cs_index-1],
+                         1,
+                         sizeof(struct req_client),
+                         (char*)&client_request
+                     );
+
+    if(ret<0)
+    {
+        SP_error( ret );
+//        Bye();
+    }
+    printf("sent message\n" );
+    return;
+}
+
+
+void delete_obj(int obj_num)
+{
+    struct db_object *ob;
+    int ret;
+
+    if((ob=search_obj(obj_num))==NULL){
+        printf("Object is not present... exiting\n");
+        exit(0);
+    }
+    /*
+     * Build the packet and send to server
+     */
+
+    struct req_client client_request;
+
+    client_request.packet_type  = packet_Client;
+    client_request.op           = 'd';
+    client_request.obj_id       = ob->obj_id;
+    client_request.server_index = ob->server_index;
+    memcpy(client_request.db_name,dboard,DB_NAME_SIZE);
+    memcpy(client_request.obj,ob->object,OBJ_SIZE);
+    printf("Deleting Object %s\n",ob->object);
+
+    ret= SP_multicast(
+                         Mbox,
+                         FIFO_MESS,
+                         server_list[cs_index-1],
+                         1,
+                         sizeof(struct req_client),
+                         (char*)&client_request
+                     );
+
+    if(ret<0)
+    {
+        SP_error( ret );
+  //      Bye();
+    }
+    printf("sent message\n" );
+    return;
+}
+
+//display with linenumbers and the users would select the linenumber to delete the object.
+void display_board()
+{
+	struct db_object *current;
+	int line_no=1;
+	
+	current = head;
+	printf("Discussion Board:\n");
+	printf("-----------------\n");
+
+	printf("\n");
+
+	printf("\tLineno\tLts\tServer_index\tObject\n");
+	printf("-------------------------------------------------------------------------\n");
+    if(head != NULL){
+        do
+	   	{
+	    	lts_mapper[line_no-1] = current->obj_id;
+		    si_mapper[line_no-1] = current->server_index;
+		    printf("\t%d\t%d\t%d\t\t%s\n",line_no++,current->obj_id,current->server_index,current->object);
+		    current = current->next;
+	    }while(current != head);
+    }
+
+}
+
+/*
+int main()
+{
+	char choice;
+	init_list();
+	int line_no;
+	int lts,server_index;
+	char obj[MAX_OBJECT_SIZE];
+
+	do
+	{
+		printf("\t I to Insert\n");
+		printf("\t D to Delete \n");
+		printf("\t V to Display List \n");
+		printf("\t S to Search for Object\n");
+		printf("\t Q to Quit\n");
+		choice = getchar();		
+
+		switch(choice)
+		{
+			case 'i':
+				//printf("Enter obj_no\n");
+				//scanf("%d",&obj_no);
+				printf("Enter lts\n");
+				scanf("%d",&lts);
+				printf("Enter server_index\n");
+				scanf("%d",&server_index);
+				printf("Enter message \n");
+				scanf("%s",obj);
+				
+//				edit(lts,server_index,obj);
+				break;
+			case 'd':
+				printf("Enter line_no to delete\n");
+				scanf("%d",&line_no);
+				lts = lts_mapper[line_no-1];
+				server_index = si_mapper[line_no-1];
+//				del(lts,server_index);
+				break;
+	
+			case 's':
+				printf("Enter line_no to search for object\n");
+				scanf("%d",&line_no);
+				lts = lts_mapper[line_no-1];
+				server_index = si_mapper[line_no-1];
+				search(lts,server_index);
+				break;
+			case 'v':
+				display_board();
+				break;
+			
+		}
+	
+	}while( choice != 'q');
+	
+	
+
+	return 0;
+}
+*/
